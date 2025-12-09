@@ -3,309 +3,367 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Chat P2P - Full Mesh</title>
+    <title>P2P Chat - Modo Supernó</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
       body {
-        font-family: "Segoe UI", sans-serif;
-        background: #222;
-        color: #eee;
+        font-family: "Courier New", monospace;
+        background: #121212;
+        color: #0f0;
         display: flex;
         flex-direction: column;
         align-items: center;
         min-height: 100vh;
         margin: 0;
+        padding: 10px;
       }
       .container {
         max-width: 600px;
-        width: 95%;
-        margin-top: 20px;
+        width: 100%;
       }
       h1 {
-        color: #4facfe;
         text-align: center;
+        border-bottom: 1px solid #0f0;
+        padding-bottom: 10px;
       }
+
       .panel {
-        background: #333;
-        padding: 20px;
-        border-radius: 8px;
+        background: #1a1a1a;
+        padding: 15px;
+        border: 1px solid #333;
         margin-bottom: 15px;
-        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
       }
       .hidden {
-        display: none;
+        display: none !important;
       }
+
       input {
         width: 100%;
-        padding: 12px;
-        margin: 10px 0;
-        border-radius: 4px;
-        border: none;
+        padding: 10px;
+        background: #000;
+        border: 1px solid #0f0;
+        color: #fff;
         box-sizing: border-box;
+        font-family: inherit;
       }
       button {
         width: 100%;
-        padding: 12px;
-        background: #4facfe;
+        padding: 10px;
+        margin-top: 10px;
+        background: #0f0;
+        color: #000;
         border: none;
         font-weight: bold;
         cursor: pointer;
-        border-radius: 4px;
-        color: #fff;
-        transition: 0.2s;
       }
       button:hover {
-        background: #00f2fe;
+        background: #0c0;
       }
-      #messages {
-        height: 350px;
+
+      #chat-box {
+        height: 300px;
         overflow-y: auto;
-        background: #1a1a1a;
+        border: 1px solid #333;
         padding: 10px;
-        border-radius: 4px;
+        background: #000;
         margin-bottom: 10px;
-        border: 1px solid #444;
       }
       .msg {
-        margin-bottom: 8px;
-        padding: 6px 10px;
-        border-radius: 4px;
-        background: #444;
-        word-wrap: break-word;
-      }
-      .msg.system {
-        color: #888;
-        font-style: italic;
-        font-size: 0.8em;
-        text-align: center;
-        background: transparent;
+        margin-bottom: 5px;
+        word-break: break-word;
       }
       .msg.me {
-        background: #005c4b;
+        color: #aaa;
         text-align: right;
-        align-self: flex-end;
+      }
+      .msg.sys {
+        color: #ff0;
+        font-style: italic;
+      }
+      .msg.err {
+        color: #f00;
+        font-weight: bold;
+      }
+
+      #debug-log {
+        font-size: 0.7em;
+        color: #555;
+        height: 100px;
+        overflow-y: auto;
+        border-top: 1px dashed #333;
+        margin-top: 20px;
+        padding: 5px;
       }
       #qrcode {
-        display: flex;
-        justify-content: center;
-        margin: 20px 0;
         background: white;
         padding: 10px;
-        border-radius: 4px;
-      }
-      .badge {
-        background: #555;
-        padding: 2px 6px;
-        border-radius: 4px;
-        font-size: 0.8em;
-        margin-left: 5px;
+        display: inline-block;
       }
     </style>
   </head>
   <body>
     <div class="container">
-      <h1>
-        🕸️ P2P Mesh Chat <span id="peer-count" class="badge">0 Online</span>
-      </h1>
+      <h1>PROTOCOL: P2P_CHAT_V3</h1>
+      <div id="status">Status: Offline</div>
 
       <div id="login" class="panel">
-        <h3>Entrar na Rede</h3>
-        <input type="text" id="username" placeholder="Seu Apelido (Ex: Ana)" />
-        <button onclick="initApp()">Conectar</button>
+        <p>IDENTIFICAÇÃO:</p>
+        <input type="text" id="username" placeholder="Digite seu Nickname..." />
+        <button onclick="startSystem()">INICIAR SISTEMA</button>
       </div>
 
-      <div id="lobby" class="panel hidden">
-        <p style="text-align: center; color: #aaa">
-          Compartilhe para outros entrarem:
-        </p>
-        <div id="qrcode"></div>
-        <p
-          id="my-id"
-          style="font-size: 0.7em; text-align: center; word-break: break-all"
-        ></p>
-        <button
-          onclick="enterChat()"
-          style="background: #444; margin-top: 10px"
-        >
-          Ocultar QR Code e ir pro Chat
-        </button>
-      </div>
-
-      <div id="chat" class="panel hidden">
-        <div id="messages"></div>
-        <div style="display: flex; gap: 10px">
-          <input type="text" id="msgInput" placeholder="Mensagem..." />
-          <button onclick="sendUserMessage()" style="width: 80px">
-            Enviar
-          </button>
+      <div id="host-panel" class="panel hidden">
+        <p>MODO SUPERNO ATIVO</p>
+        <div style="text-align: center">
+          <div id="qrcode"></div>
+          <p
+            id="host-id-display"
+            style="font-size: 0.8em; margin-top: 10px"
+          ></p>
         </div>
+        <p>Peers Conectados: <span id="peer-count">0</span></p>
+        <button onclick="goToChat()">ABRIR TERMINAL DE CHAT</button>
+      </div>
+
+      <div id="chat-panel" class="panel hidden">
+        <div id="chat-box"></div>
+        <input type="text" id="msgInput" placeholder="Mensagem..." />
+        <button onclick="sendMessage()">ENVIAR (ENTER)</button>
         <button
-          onclick="showLobby()"
-          style="
-            background: transparent;
-            color: #888;
-            font-size: 0.8em;
-            margin-top: 5px;
-          "
+          onclick="showHostPanel()"
+          id="back-btn"
+          class="hidden"
+          style="background: #333; color: #fff; margin-top: 5px"
         >
-          Mostrar QR Code novamente
+          Ver QR Code
         </button>
       </div>
+
+      <div id="debug-log">Logs do Sistema Iniciados...</div>
     </div>
 
     <script>
-      let peer
-      let myName
-      let connections = {} // Lista de conexões
-      // Gera um ID único para cada mensagem para evitar duplicatas (caso a malha funcione parcialmente)
-      let processedMessageIds = new Set()
+      // --- CONFIGURAÇÃO GLOBAL ---
+      const PEER_CONFIG = {
+        debug: 2, // Mostra erros no console do navegador
+        config: {
+          iceServers: [
+            { urls: "stun:stun.l.google.com:19302" },
+            { urls: "stun:global.stun.twilio.com:3478" },
+          ],
+        },
+      }
 
+      let peer = null
+      let myName = "Anônimo"
+      let myId = null
+
+      // Armazena conexões: { "id_do_peer": objeto_conexao }
+      let connections = {}
+
+      // Verifica se é Host ou Visitante pela URL
       const urlParams = new URLSearchParams(window.location.search)
-      const hostId = urlParams.get("seed") // Se tiver ID na URL, é cliente. Se não, é Host.
+      const hostId = urlParams.get("host")
+      const isHost = !hostId
 
-      function initApp() {
+      // --- SISTEMA ---
+
+      function startSystem() {
         myName = document.getElementById("username").value
-        if (!myName) return alert("Digite um nome!")
+        if (!myName) return alert("Identificação necessária.")
 
         document.getElementById("login").classList.add("hidden")
-        document.getElementById(
-          "messages"
-        ).innerHTML += `<div class="msg system">Iniciando nó P2P...</div>`
-        document.getElementById("chat").classList.remove("hidden")
+        logDebug("Iniciando PeerJS...")
 
-        // Configuração com servidores STUN públicos para ajudar na conexão
-        peer = new Peer({
-          config: {
-            iceServers: [
-              { urls: "stun:stun.l.google.com:19302" },
-              { urls: "stun:global.stun.twilio.com:3478" },
-            ],
-          },
-        })
+        peer = new Peer(PEER_CONFIG)
 
         peer.on("open", (id) => {
-          console.log("Meu ID:", id)
-          document.getElementById("my-id").innerText = `ID: ${id}`
+          myId = id
+          logDebug(`Meu ID na rede: ${id}`)
+          document.getElementById("status").innerText = `Status: Online (${
+            isHost ? "HOST" : "CLIENT"
+          })`
 
-          if (!hostId) {
-            // SOU O HOST (SUPERNO)
-            generateQRCode(id)
-            document.getElementById("chat").classList.add("hidden")
-            document.getElementById("lobby").classList.remove("hidden")
-            log("Sala criada. Aguardando peers...", "system")
+          if (isHost) {
+            setupHostUI(id)
           } else {
-            // SOU CLIENTE
-            log("Conectando ao Supernó...", "system")
             connectToHost(hostId)
           }
         })
 
         peer.on("connection", (conn) => {
-          setupConnection(conn)
+          // Apenas o Host deveria receber conexões diretas neste modelo
+          logDebug(`Recebendo conexão de: ${conn.peer}`)
+          handleConnection(conn)
         })
 
-        peer.on("error", (err) => console.error(err))
-      }
-
-      function connectToHost(id) {
-        const conn = peer.connect(id, { metadata: { name: myName } })
-        conn.on("open", () => setupConnection(conn))
-        conn.on("error", (err) => log("Erro na conexão: " + err, "system"))
-      }
-
-      function setupConnection(conn) {
-        if (connections[conn.peer]) return
-
-        connections[conn.peer] = conn
-        updateCount()
-
-        conn.on("data", (data) => handleData(data, conn))
-        conn.on("close", () => {
-          log(`${conn.metadata.name || "Alguém"} saiu.`, "system")
-          delete connections[conn.peer]
-          updateCount()
+        peer.on("error", (err) => {
+          logDebug(`ERRO CRÍTICO: ${err.type}`)
+          addMsg(`Erro de conexão: ${err.type}`, "err")
         })
       }
 
-      function handleData(data, senderConn) {
-        // 1. Evita processar a mesma mensagem duas vezes
-        if (processedMessageIds.has(data.id)) return
-        processedMessageIds.add(data.id)
+      // --- LÓGICA DO HOST ---
 
-        // 2. Atualiza nome se necessário
-        if (data.senderName && senderConn && !senderConn.metadata.name) {
-          senderConn.metadata.name = data.senderName
-        }
+      function setupHostUI(id) {
+        document.getElementById("host-panel").classList.remove("hidden")
+        document.getElementById("back-btn").classList.remove("hidden") // Host pode voltar pra ver QR
+        document.getElementById("host-id-display").innerText = id
 
-        // 3. Exibe a mensagem
-        if (data.type === "chat") {
-          log(`<strong>${data.senderName}:</strong> ${data.msg}`)
-
-          // 4. LÓGICA DO SUPERNÓ (RELAY)
-          // Se eu sou o Host (!hostId), eu retransmito a mensagem para todos, MENOS para quem mandou
-          if (!hostId) {
-            broadcast(data, senderConn.peer)
-          }
-        }
-      }
-
-      function sendUserMessage() {
-        const txt = document.getElementById("msgInput").value
-        if (!txt) return
-
-        // Cria um ID único para a mensagem (Timestamp + Random)
-        const msgId = Date.now() + Math.random().toString(36).substr(2, 9)
-        const payload = {
-          type: "chat",
-          id: msgId,
-          senderName: myName,
-          msg: txt,
-        }
-
-        log(`<strong>Você:</strong> ${txt}`, "me")
-        processedMessageIds.add(msgId) // Já marco que eu vi minha própria mensagem
-
-        // Manda para quem estiver conectado (Se sou Host, mando pra todos. Se sou Cliente, mando pro Host)
-        broadcast(payload)
-
-        document.getElementById("msgInput").value = ""
-      }
-
-      function broadcast(data, excludeId = null) {
-        Object.values(connections).forEach((conn) => {
-          if (conn.peer !== excludeId) {
-            conn.send(data)
-          }
-        })
-      }
-
-      // Funções visuais (sem alteração)
-      function log(html, type = "") {
-        const box = document.getElementById("messages")
-        box.innerHTML += `<div class="msg ${type}">${html}</div>`
-        box.scrollTop = box.scrollHeight
-      }
-      function updateCount() {
-        const count = Object.keys(connections).length
-        document.getElementById("peer-count").innerText = `${count} Peers`
-      }
-      function generateQRCode(id) {
-        const url = `${window.location.href.split("?")[0]}?seed=${id}`
+        // Gera QR Code
+        const url = `${window.location.href.split("?")[0]}?host=${id}`
         new QRCode(document.getElementById("qrcode"), {
           text: url,
           width: 150,
           height: 150,
         })
       }
-      function enterChat() {
-        document.getElementById("lobby").classList.add("hidden")
-        document.getElementById("chat").classList.remove("hidden")
+
+      // --- LÓGICA DE CONEXÃO ---
+
+      function connectToHost(targetId) {
+        document.getElementById("chat-panel").classList.remove("hidden")
+        logDebug(`Tentando conectar ao Host: ${targetId}...`)
+
+        // O segredo: serialization: 'json'
+        const conn = peer.connect(targetId, {
+          metadata: { name: myName },
+          serialization: "json",
+          reliable: true,
+        })
+
+        handleConnection(conn)
       }
-      function showLobby() {
-        document.getElementById("chat").classList.add("hidden")
-        document.getElementById("lobby").classList.remove("hidden")
+
+      function handleConnection(conn) {
+        // Evento: Conexão ABERTA e pronta para uso
+        conn.on("open", () => {
+          logDebug(`Canal aberto com: ${conn.peer}`)
+
+          // Adiciona à lista de conexões ativas
+          connections[conn.peer] = conn
+          updatePeerCount()
+
+          if (isHost) {
+            // Host avisa a todos que alguém entrou (opcional)
+            broadcast({
+              type: "sys",
+              msg: `${conn.metadata.name || "Alguém"} entrou.`,
+            })
+          } else {
+            // Cliente avisa que chegou
+            conn.send({ type: "sys", msg: `${myName} conectou.` })
+          }
+        })
+
+        // Evento: Recebeu DADOS
+        conn.on("data", (data) => {
+          console.log("Dados recebidos:", data) // Debug no console F12
+
+          if (data.type === "sys") {
+            addMsg(data.msg, "sys")
+            // Se sou Host, repasso avisos de sistema também
+            if (isHost) broadcast(data, conn.peer)
+          } else if (data.type === "chat") {
+            addMsg(`${data.name}: ${data.msg}`)
+
+            // O PULO DO GATO: RELAY
+            // Se sou Host, reenvio para todos (menos pra quem mandou)
+            if (isHost) {
+              broadcast(data, conn.peer)
+            }
+          }
+        })
+
+        conn.on("close", () => {
+          logDebug(`Conexão fechada: ${conn.peer}`)
+          delete connections[conn.peer]
+          updatePeerCount()
+          if (isHost) broadcast({ type: "sys", msg: "Um peer desconectou." })
+        })
+
+        conn.on("error", (err) =>
+          logDebug(`Erro na conexao ${conn.peer}: ${err}`)
+        )
       }
+
+      // --- ENVIO DE MENSAGENS ---
+
+      function sendMessage() {
+        const input = document.getElementById("msgInput")
+        const txt = input.value
+        if (!txt) return
+
+        const payload = { type: "chat", name: myName, msg: txt }
+
+        // 1. Mostra na minha tela
+        addMsg(`Eu: ${txt}`, "me")
+
+        // 2. Envia para a rede
+        if (isHost) {
+          broadcast(payload) // Host manda pra todos
+        } else {
+          // Cliente manda pro Host (que fará o broadcast)
+          // Pegar a única conexão que tenho (que é com o host)
+          const hostConn = Object.values(connections)[0]
+          if (hostConn && hostConn.open) {
+            hostConn.send(payload)
+          } else {
+            logDebug("ERRO: Sem conexão com o Host para enviar.")
+            addMsg("Erro: Desconectado do Host", "err")
+          }
+        }
+
+        input.value = ""
+      }
+
+      // Função de Broadcast do Supernó
+      function broadcast(data, excludeId = null) {
+        logDebug(`Broadcasting msg...`)
+        Object.values(connections).forEach((conn) => {
+          if (conn.peer !== excludeId && conn.open) {
+            conn.send(data)
+          }
+        })
+      }
+
+      // --- UTILITÁRIOS VISUAIS ---
+
+      function addMsg(text, type = "") {
+        const box = document.getElementById("chat-box")
+        const div = document.createElement("div")
+        div.className = `msg ${type}`
+        div.innerText = text
+        box.appendChild(div)
+        box.scrollTop = box.scrollHeight
+      }
+
+      function logDebug(txt) {
+        const log = document.getElementById("debug-log")
+        log.innerHTML = `> ${txt}<br>` + log.innerHTML
+        console.log(`[P2P] ${txt}`)
+      }
+
+      function updatePeerCount() {
+        document.getElementById("peer-count").innerText =
+          Object.keys(connections).length
+      }
+
+      function goToChat() {
+        document.getElementById("host-panel").classList.add("hidden")
+        document.getElementById("chat-panel").classList.remove("hidden")
+      }
+
+      function showHostPanel() {
+        document.getElementById("chat-panel").classList.add("hidden")
+        document.getElementById("host-panel").classList.remove("hidden")
+      }
+
+      // Enter para enviar
+      document.getElementById("msgInput").addEventListener("keypress", (e) => {
+        if (e.key === "Enter") sendMessage()
+      })
     </script>
   </body>
 </html>
