@@ -279,19 +279,30 @@
       }
 
       function handleDisconnect(conn) {
-        if (!connections[conn.peer]) return // Já foi removido
-
-        logDebug(`Peer desconectou: ${conn.peer}`)
+        logDebug(`Conexão perdida com: ${conn.peer}`)
         delete connections[conn.peer]
         updateCount()
 
+        // CENÁRIO 1: Sou HOST e um cliente saiu
         if (isHost) {
           const exitMsg = {
             type: "sys",
-            msg: `${conn.metadata.name || "Um peer"} saiu da rede.`,
+            msg: `${conn.metadata.name || "Um peer"} desconectou.`,
           }
           broadcast(exitMsg)
           addMsg(exitMsg.msg, "sys")
+        }
+        // CENÁRIO 2: Sou CLIENTE e o HOST morreu
+        else {
+          // Se não tenho mais conexões, significa que o Host caiu
+          if (Object.keys(connections).length === 0) {
+            addMsg("⚠️ O SUPERNÓ CAIU. A REDE FOI DESFEITA.", "err")
+            document.getElementById("msgInput").disabled = true
+            document.getElementById("status-bar").innerText =
+              "Status: DESCONECTADO (HOST OFFLINE)"
+            document.getElementById("status-bar").style.color = "red"
+            alert("O Host encerrou a sessão. A rede P2P foi finalizada.")
+          }
         }
       }
 
@@ -365,6 +376,22 @@
 
       document.getElementById("msgInput").addEventListener("keypress", (e) => {
         if (e.key === "Enter") sendMessage()
+      })
+      // Tenta enviar um último suspiro antes de fechar a aba ou dar F5
+      window.addEventListener("beforeunload", () => {
+        if (isHost) {
+          // Host avisa que a rede vai cair
+          broadcast({
+            type: "sys",
+            msg: "O Supernó foi desligado. Rede encerrada.",
+          })
+        } else {
+          // Cliente avisa que está saindo
+          const hostConn = Object.values(connections)[0]
+          if (hostConn && hostConn.open) {
+            hostConn.send({ type: "sys", msg: `${myName} saiu da rede.` })
+          }
+        }
       })
     </script>
   </body>
