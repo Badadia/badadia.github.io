@@ -157,9 +157,12 @@
     <script>
       let peer
       let myName
-      let connections = {} // Armazena conexões por ID: { 'peer_id': conn_object }
+      let connections = {} // Lista de conexões
+      // Gera um ID único para cada mensagem para evitar duplicatas (caso a malha funcione parcialmente)
+      let processedMessageIds = new Set()
+
       const urlParams = new URLSearchParams(window.location.search)
-      const seedId = urlParams.get("seed") // ID do "anfitrião" inicial
+      const hostId = urlParams.get("seed") // Se tiver ID na URL, é cliente. Se não, é Host.
 
       function initApp() {
         myName = document.getElementById("username").value
@@ -171,26 +174,33 @@
         ).innerHTML += `<div class="msg system">Iniciando nó P2P...</div>`
         document.getElementById("chat").classList.remove("hidden")
 
-        peer = new Peer() // Cria ID aleatório
+        // Configuração com servidores STUN públicos para ajudar na conexão
+        peer = new Peer({
+          config: {
+            iceServers: [
+              { urls: "stun:stun.l.google.com:19302" },
+              { urls: "stun:global.stun.twilio.com:3478" },
+            ],
+          },
+        })
 
         peer.on("open", (id) => {
           console.log("Meu ID:", id)
           document.getElementById("my-id").innerText = `ID: ${id}`
 
-          // Se eu não entrei por link de ninguém, eu sou o SEED (Semente/Primeiro)
-          if (!seedId) {
+          if (!hostId) {
+            // SOU O HOST (SUPERNO)
             generateQRCode(id)
             document.getElementById("chat").classList.add("hidden")
             document.getElementById("lobby").classList.remove("hidden")
-            log("Você criou a rede. Aguardando peers...", "system")
+            log("Sala criada. Aguardando peers...", "system")
           } else {
-            // Se entrei por link, conecto no SEED para pedir entrada
-            log("Conectando ao nó inicial...", "system")
-            connectToPeer(seedId)
+            // SOU CLIENTE
+            log("Conectando ao Supernó...", "system")
+            connectToHost(hostId)
           }
         })
 
-        // Quando alguém conecta em mim
         peer.on("connection", (conn) => {
           setupConnection(conn)
         })
@@ -198,19 +208,13 @@
         peer.on("error", (err) => console.error(err))
       }
 
-      function connectToPeer(peerId) {
-        if (connections[peerId]) return // Já conectado
-        if (peerId === peer.id) return // Não conectar em si mesmo
-
-        const conn = peer.connect(peerId, {
-          metadata: { name: myName }, // Mando meu nome junto
-        })
-
+      function connectToHost(id) {
+        const conn = peer.connect(id, { metadata: { name: myName } })
         conn.on("open", () => setupConnection(conn))
+        conn.on("error", (err) => log("Erro na conexão: " + err, "system"))
       }
 
       function setupConnection(conn) {
-        // Se já tenho essa conexão, ignoro para não duplicar
         if (connections[conn.peer]) return
 
         connections[conn.peer] = conn
@@ -222,36 +226,27 @@
           delete connections[conn.peer]
           updateCount()
         })
-
-        // Se eu sou o SEED e alguém conectou, mando a lista de quem mais tá aqui
-        // Isso é o pulo do gato para formar o MESH
-        if (!seedId || Object.keys(connections).length > 1) {
-          const peersToShare = Object.keys(connections).filter(
-            (id) => id !== conn.peer
-          )
-          if (peersToShare.length > 0) {
-            conn.send({
-              type: "peer-list",
-              peers: peersToShare,
-            })
-          }
-        }
       }
 
       function handleData(data, senderConn) {
-        // Atualiza o nome do peer se vier no payload (primeira conexão as vezes delay)
-        if (!senderConn.metadata.name && data.senderName) {
+        // 1. Evita processar a mesma mensagem duas vezes
+        if (processedMessageIds.has(data.id)) return
+        processedMessageIds.add(data.id)
+
+        // 2. Atualiza nome se necessário
+        if (data.senderName && senderConn && !senderConn.metadata.name) {
           senderConn.metadata.name = data.senderName
         }
 
+        // 3. Exibe a mensagem
         if (data.type === "chat") {
           log(`<strong>${data.senderName}:</strong> ${data.msg}`)
-        } else if (data.type === "peer-list") {
-          // Recebi uma lista de IPs para conectar (Lógica Mesh)
-          console.log("Recebi lista de peers:", data.peers)
-          data.peers.forEach((otherPeerId) => {
-            connectToPeer(otherPeerId)
-          })
+
+          // 4. LÓGICA DO SUPERNÓ (RELAY)
+          // Se eu sou o Host (!hostId), eu retransmito a mensagem para todos, MENOS para quem mandou
+          if (!hostId) {
+            broadcast(data, senderConn.peer)
+          }
         }
       }
 
@@ -259,34 +254,42 @@
         const txt = document.getElementById("msgInput").value
         if (!txt) return
 
-        log(`<strong>Você:</strong> ${txt}`, "me")
+        // Cria um ID único para a mensagem (Timestamp + Random)
+        const msgId = Date.now() + Math.random().toString(36).substr(2, 9)
+        const payload = {
+          type: "chat",
+          id: msgId,
+          senderName: myName,
+          msg: txt,
+        }
 
-        // Envia para TODOS os conectados (Broadcast Mesh)
-        Object.values(connections).forEach((conn) => {
-          conn.send({
-            type: "chat",
-            senderName: myName,
-            msg: txt,
-          })
-        })
+        log(`<strong>Você:</strong> ${txt}`, "me")
+        processedMessageIds.add(msgId) // Já marco que eu vi minha própria mensagem
+
+        // Manda para quem estiver conectado (Se sou Host, mando pra todos. Se sou Cliente, mando pro Host)
+        broadcast(payload)
 
         document.getElementById("msgInput").value = ""
       }
 
-      // Funções de Interface
+      function broadcast(data, excludeId = null) {
+        Object.values(connections).forEach((conn) => {
+          if (conn.peer !== excludeId) {
+            conn.send(data)
+          }
+        })
+      }
+
+      // Funções visuais (sem alteração)
       function log(html, type = "") {
         const box = document.getElementById("messages")
         box.innerHTML += `<div class="msg ${type}">${html}</div>`
         box.scrollTop = box.scrollHeight
       }
-
       function updateCount() {
         const count = Object.keys(connections).length
-        document.getElementById(
-          "peer-count"
-        ).innerText = `${count} Peers Conectados`
+        document.getElementById("peer-count").innerText = `${count} Peers`
       }
-
       function generateQRCode(id) {
         const url = `${window.location.href.split("?")[0]}?seed=${id}`
         new QRCode(document.getElementById("qrcode"), {
@@ -295,12 +298,10 @@
           height: 150,
         })
       }
-
       function enterChat() {
         document.getElementById("lobby").classList.add("hidden")
         document.getElementById("chat").classList.remove("hidden")
       }
-
       function showLobby() {
         document.getElementById("chat").classList.add("hidden")
         document.getElementById("lobby").classList.remove("hidden")
