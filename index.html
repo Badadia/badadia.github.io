@@ -176,9 +176,8 @@
 
       let peer = null
       let myName = "Anônimo"
-      let connections = {} // Lista de conexões ativas
+      let connections = {}
 
-      // Verifica URL
       const urlParams = new URLSearchParams(window.location.search)
       const hostId = urlParams.get("host")
       const isHost = !hostId
@@ -202,12 +201,10 @@
           } else {
             connectToHost(hostId)
           }
-          // Inicia o Heartbeat para manter a conexão viva
           startHeartbeat()
         })
 
         peer.on("connection", (conn) => {
-          // Se sou Host, aceito conexões
           if (isHost) handleConnection(conn)
         })
 
@@ -246,26 +243,23 @@
           connections[conn.peer] = conn
           updateCount()
 
-          // CORREÇÃO 1: Apenas o HOST anuncia a entrada para evitar duplicidade
           if (isHost) {
             const joinMsg = {
               type: "sys",
               msg: `${conn.metadata.name || "Novo peer"} entrou na rede.`,
             }
-            broadcast(joinMsg) // Manda pros outros
-            addMsg(joinMsg.msg, "sys") // Mostra pro Host
+            broadcast(joinMsg)
+            addMsg(joinMsg.msg, "sys")
           }
         })
 
         conn.on("data", (data) => {
-          // CORREÇÃO 2: Ignora pings (não mostra no chat)
           if (data.type === "ping") return
 
           if (data.type === "sys") {
             addMsg(data.msg, "sys")
           } else if (data.type === "chat") {
             addMsg(`${data.name}: ${data.msg}`)
-            // Se sou Host, retransmito (Relay)
             if (isHost) broadcast(data, conn.peer)
           }
         })
@@ -274,7 +268,6 @@
           handleDisconnect(conn)
         })
 
-        // Fallback para desconexão abrupta
         conn.on("error", () => handleDisconnect(conn))
       }
 
@@ -283,7 +276,6 @@
         delete connections[conn.peer]
         updateCount()
 
-        // CENÁRIO 1: Sou HOST e um cliente saiu
         if (isHost) {
           const exitMsg = {
             type: "sys",
@@ -291,10 +283,7 @@
           }
           broadcast(exitMsg)
           addMsg(exitMsg.msg, "sys")
-        }
-        // CENÁRIO 2: Sou CLIENTE e o HOST morreu
-        else {
-          // Se não tenho mais conexões, significa que o Host caiu
+        } else {
           if (Object.keys(connections).length === 0) {
             addMsg("⚠️ O SUPERNÓ CAIU. A REDE FOI DESFEITA.", "err")
             document.getElementById("msgInput").disabled = true
@@ -314,7 +303,7 @@
               conn.send({ type: "ping" })
             }
           })
-        }, 5000) // Envia ping a cada 5 segundos
+        }, 5000)
       }
 
       // --- CHAT ---
@@ -329,7 +318,6 @@
         if (isHost) {
           broadcast(payload)
         } else {
-          // Cliente manda pro Host
           const hostConn = Object.values(connections)[0]
           if (hostConn && hostConn.open) hostConn.send(payload)
         }
@@ -377,16 +365,13 @@
       document.getElementById("msgInput").addEventListener("keypress", (e) => {
         if (e.key === "Enter") sendMessage()
       })
-      // Tenta enviar um último suspiro antes de fechar a aba ou dar F5
       window.addEventListener("beforeunload", () => {
         if (isHost) {
-          // Host avisa que a rede vai cair
           broadcast({
             type: "sys",
             msg: "O Supernó foi desligado. Rede encerrada.",
           })
         } else {
-          // Cliente avisa que está saindo
           const hostConn = Object.values(connections)[0]
           if (hostConn && hostConn.open) {
             hostConn.send({ type: "sys", msg: `${myName} saiu da rede.` })
